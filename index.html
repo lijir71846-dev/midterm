@@ -1315,7 +1315,9 @@ function createMotes(canvas, config = {}) {
       // 叠加（additive）绘制：只增亮、不覆盖，跟背景自然融合
       fctx.globalCompositeOperation = 'lighter'
 
-      // 光晕：由字符组成——对齐背景字符网格，高斯衰减，仿原版指针的字符增亮
+      // 光晕：完全由字符表现——高斯亮度映射到字符集（亮→右侧密字符，暗→左侧疏字符）
+      const csRaw = document.getElementById('charset').value || ' '
+      const cs = csRaw[0] === ' ' ? csRaw : ' ' + csRaw
       const density = Number(document.getElementById('density').value)
       const cellW = Math.max(5, density * 0.6), cellH = density
       const sigma = r * 0.55
@@ -1333,21 +1335,18 @@ function createMotes(canvas, config = {}) {
           if (d2 > r * r * 2.2) continue
           const a = Math.exp(-d2 / (2 * sigma * sigma))
           if (a < 0.05) continue
-          fctx.fillStyle = hexToRgba(fxAccent, a * 0.5)
-          fctx.fillText(fxGlyph, gx, gy)
+          const idx = Math.max(0, Math.min(cs.length - 1, Math.round(a * (cs.length - 1))))
+          const glyph = cs[idx] || ' '
+          if (glyph === ' ') continue
+          fctx.fillStyle = hexToRgba(fxAccent, 0.45)
+          fctx.fillText(glyph, gx, gy)
         }
       }
 
-      // 字符图案：核心形状，亮度随离中心距离衰减
+      // 字符图案：核心形状（用最亮字符，柔和叠加）
       fctx.font = `${Math.max(12, r * 0.2)}px ui-monospace, monospace`
-      for (const p of patternPoints(pattern, px, py, r)) {
-        const dx = p.x - px, dy = p.y - py
-        const d = Math.sqrt(dx * dx + dy * dy) / r
-        const a = Math.max(0, 1 - d) * 0.55
-        if (a <= 0) continue
-        fctx.fillStyle = hexToRgba(fxAccent, a)
-        fctx.fillText(fxGlyph, p.x, p.y)
-      }
+      fctx.fillStyle = hexToRgba(fxAccent, 0.5)
+      for (const p of patternPoints(pattern, px, py, r)) fctx.fillText(fxGlyph, p.x, p.y)
       fctx.globalCompositeOperation = 'source-over'
     }
     requestAnimationFrame(fxFrame)
