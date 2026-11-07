@@ -209,8 +209,8 @@
         <div class="hint">非「原生」时，图案由 ASCII 字符组成并带拖尾。</div>
       </div>
       <div class="slider">
-        <div class="head"><span class="name">图案尺寸 <em>(px)</em></span><span class="val" id="val-pattern-size"></span></div>
-        <input type="range" id="pattern-size" min="40" max="200" step="1" value="80" />
+        <div class="head"><span class="name">指针大小 <em>(px)</em></span><span class="val" id="val-pointer-size"></span></div>
+        <input type="range" id="pointer-size" min="40" max="360" step="1" value="150" />
       </div>
       <div id="sliders-pointer"></div>
     </section>
@@ -1123,7 +1123,6 @@ function createMotes(canvas, config = {}) {
     }
 
     const SLIDERS = [
-      { id: 'radius',   label: 'radius',   unit: 'px', min: 40,  max: 360, step: 1,    group: 'pointer', fmt: v => `${v}px` },
       { id: 'force',    label: 'force',    unit: '',   min: 0,   max: 3,   step: 0.1,  group: 'pointer', fmt: v => v.toFixed(1) },
       { id: 'density',  label: 'density',  unit: 'px', min: 8,   max: 22,  step: 1,    group: 'field',   fmt: v => `${v}px` },
       { id: 'speed',    label: 'speed',    unit: '',   min: 0,   max: 3,   step: 0.1,  group: 'field',   fmt: v => v.toFixed(1) },
@@ -1245,9 +1244,9 @@ function createMotes(canvas, config = {}) {
     const fx = document.getElementById('fx')
     const fctx = fx.getContext('2d')
     const patternSel = document.getElementById('pointer-pattern')
-    const patternSize = document.getElementById('pattern-size')
-    const patternSizeVal = document.getElementById('val-pattern-size')
-    patternSizeVal.textContent = patternSize.value + 'px'
+    const pointerSize = document.getElementById('pointer-size')
+    const pointerSizeVal = document.getElementById('val-pointer-size')
+    pointerSizeVal.textContent = pointerSize.value + 'px'
 
     let pattern = 'native'
     let px = -9999, py = -9999, tx = -9999, ty = -9999, live = false
@@ -1311,26 +1310,40 @@ function createMotes(canvas, config = {}) {
 
       px += (tx - px) * 0.25
       py += (ty - py) * 0.25
-      const r = Number(patternSize.value)
+      const r = Number(pointerSize.value)
 
       // 叠加（additive）绘制：只增亮、不覆盖，跟背景自然融合
       fctx.globalCompositeOperation = 'lighter'
 
-      // 柔和光晕（低透明度，边缘淡出）
-      const g = fctx.createRadialGradient(px, py, 0, px, py, r * 1.6)
-      g.addColorStop(0, hexToRgba(fxAccent, 0.14))
-      g.addColorStop(1, hexToRgba(fxAccent, 0))
-      fctx.fillStyle = g
-      fctx.beginPath(); fctx.arc(px, py, r * 1.6, 0, 7); fctx.fill()
-
-      // 字符图案：亮度随离中心距离衰减，形成柔和晕开
-      fctx.font = `${Math.max(12, r * 0.2)}px ui-monospace, monospace`
+      // 光晕：由字符组成——对齐背景字符网格，高斯衰减，仿原版指针的字符增亮
+      const density = Number(document.getElementById('density').value)
+      const cellW = Math.max(5, density * 0.6), cellH = density
+      const sigma = r * 0.55
+      const reach = r * 1.5
+      const i0 = Math.floor((px - reach) / cellW), i1 = Math.ceil((px + reach) / cellW)
+      const j0 = Math.floor((py - reach) / cellH), j1 = Math.ceil((py + reach) / cellH)
+      fctx.font = `${density}px ui-monospace, monospace`
       fctx.textAlign = 'center'
       fctx.textBaseline = 'middle'
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const gx = (i + 0.5) * cellW, gy = (j + 0.5) * cellH
+          const dx = gx - px, dy = gy - py
+          const d2 = dx * dx + dy * dy
+          if (d2 > r * r * 2.2) continue
+          const a = Math.exp(-d2 / (2 * sigma * sigma))
+          if (a < 0.05) continue
+          fctx.fillStyle = hexToRgba(fxAccent, a * 0.5)
+          fctx.fillText(fxGlyph, gx, gy)
+        }
+      }
+
+      // 字符图案：核心形状，亮度随离中心距离衰减
+      fctx.font = `${Math.max(12, r * 0.2)}px ui-monospace, monospace`
       for (const p of patternPoints(pattern, px, py, r)) {
         const dx = p.x - px, dy = p.y - py
         const d = Math.sqrt(dx * dx + dy * dy) / r
-        const a = Math.max(0, 1 - d) * 0.5
+        const a = Math.max(0, 1 - d) * 0.55
         if (a <= 0) continue
         fctx.fillStyle = hexToRgba(fxAccent, a)
         fctx.fillText(fxGlyph, p.x, p.y)
@@ -1343,12 +1356,15 @@ function createMotes(canvas, config = {}) {
       pattern = patternSel.value
       const native = pattern === 'native'
       const none = pattern === 'none'
-      field.set({ pointer: native })
+      field.set({ pointer: native, radius: Number(pointerSize.value) })
       if (!native && !none) { updatePointerGlyph() }
-      patternSize.disabled = native || none
+      pointerSize.disabled = none
     }
     patternSel.addEventListener('change', applyPattern)
-    patternSize.addEventListener('input', () => { patternSizeVal.textContent = patternSize.value + 'px' })
+    pointerSize.addEventListener('input', () => {
+      pointerSizeVal.textContent = pointerSize.value + 'px'
+      if (pattern === 'native') field.set({ radius: Number(pointerSize.value) })
+    })
     applyPattern()
 
     // ============================================================
