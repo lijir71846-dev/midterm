@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; height: 100vh; background: #050403; }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+  main { position: relative; z-index: 1; color: #eee; font-family: sans-serif; padding: 3rem; }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <main><h1>Hello</h1><p>移动鼠标试试</p></main>
+
+  <script type="module">
+    import { createMotes } from 'https://cdn.jsdelivr.net/npm/@lucasmarkes/motes@0.3.0/dist/index.js'
+    createMotes(document.getElementById('bg'), { effect: 'flow', pointer: true }).start()
+  </script>
+</body>
+</html>
