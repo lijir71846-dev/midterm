@@ -18,3 +18,348 @@
   </script>
 </body>
 </html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>motes · 控制台</title>
+<style>
+  :root {
+    --panel: rgba(12, 10, 8, 0.86);
+    --border: rgba(255, 255, 255, 0.10);
+    --text: #e8e2d5;
+    --muted: #8a8578;
+    --accent: #ddeafe;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #050403;
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    overflow: hidden;
+  }
+
+  /* 背景画布：fixed 全屏 + 必须给 100% 宽高 */
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+  /* 打开/关闭按钮 */
+  #toggle {
+    position: fixed; top: 12px; right: 12px; z-index: 30;
+    padding: 8px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    backdrop-filter: blur(8px);
+  }
+  #toggle:hover { border-color: var(--accent); }
+
+  /* 控制面板 */
+  #panel {
+    position: fixed; top: 0; right: 0; height: 100%; width: 300px; max-width: 92vw;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+    overflow-y: auto;
+    padding: 56px 18px 24px;
+    transform: translateX(0);
+    transition: transform .25s ease;
+    z-index: 20;
+  }
+  body.panel-closed #panel { transform: translateX(100%); }
+
+  #panel h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+  #panel .sub { color: var(--muted); margin: 0 0 20px; font-size: 11px; }
+
+  section { margin-bottom: 22px; }
+  section > h2 {
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+    border-bottom: 1px solid var(--border); padding-bottom: 6px;
+  }
+
+  /* 效果选择 */
+  select {
+    width: 100%; padding: 8px 10px; background: rgba(0,0,0,.35);
+    color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    font: inherit; cursor: pointer;
+  }
+
+  /* 预设按钮 */
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .preset {
+    flex: 1 1 auto; padding: 7px 8px; background: rgba(0,0,0,.35);
+    border: 1px solid var(--border); color: var(--text); border-radius: 8px;
+    cursor: pointer; font: inherit;
+  }
+  .preset:hover, .preset.active { border-color: var(--accent); }
+
+  /* 颜色行 */
+  .color-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .color-row .name { flex: 0 0 78px; color: var(--muted); }
+  .color-row input[type=color] {
+    width: 40px; height: 26px; padding: 0; border: 1px solid var(--border);
+    border-radius: 6px; background: none; cursor: pointer;
+  }
+  .color-row .hex { flex: 1; color: var(--text); font: inherit; }
+  .color-row input:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* 滑杆 */
+  .slider { margin-bottom: 12px; }
+  .slider .head { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .slider .name { color: var(--muted); }
+  .slider .val { color: var(--text); }
+  input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
+  /* 字符集 */
+  input[type=text] {
+    width: 100%; padding: 8px 10px; background: rgba(0,0,0,.35);
+    color: var(--text); border: 1px solid var(--border); border-radius: 8px; font: inherit;
+  }
+
+  /* 开关 */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; gap: 8px;
+  }
+  .toggle-row .name { color: var(--muted); }
+  .switch { position: relative; width: 38px; height: 20px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .sl {
+    position: absolute; inset: 0; background: rgba(255,255,255,.12);
+    border-radius: 999px; cursor: pointer; transition: background .15s;
+  }
+  .sl::before {
+    content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: transform .15s;
+  }
+  .switch input:checked + .sl { background: var(--accent); }
+  .switch input:checked + .sl::before { transform: translateX(18px); }
+
+  .hint { color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+
+  <button id="toggle">⚙ 控制</button>
+
+  <aside id="panel">
+    <h1>motes</h1>
+    <p class="sub">程序化 ASCII 背景 · 所有参数即时生效</p>
+
+    <section>
+      <h2>效果 Effect</h2>
+      <select id="effect"></select>
+    </section>
+
+    <section>
+      <h2>配色预设 Presets</h2>
+      <div class="presets" id="presets"></div>
+      <div class="color-row">
+        <span class="name">background</span>
+        <input type="color" id="bg-color" value="#050403" />
+        <input type="checkbox" id="bg-transparent" class="switch" />
+        <span class="hex">透明</span>
+      </div>
+      <div class="color-row">
+        <span class="name">ink</span>
+        <input type="color" id="ink-color" value="#827865" />
+        <span class="hex" id="ink-hex">#827865</span>
+      </div>
+      <div class="color-row">
+        <span class="name">accent</span>
+        <input type="color" id="accent-color" value="#ddeafe" />
+        <span class="hex" id="accent-hex">#ddeafe</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>指针 Pointer</h2>
+      <div class="toggle-row">
+        <span class="name">pointer 跟随鼠标</span>
+        <label class="switch"><input type="checkbox" id="pointer" checked /><span class="sl"></span></label>
+      </div>
+      <div id="sliders-pointer"></div>
+    </section>
+
+    <section>
+      <h2>场 Field</h2>
+      <div id="sliders-field"></div>
+    </section>
+
+    <section>
+      <h2>外观 Look</h2>
+      <div class="slider">
+        <div class="head"><span class="name">charset 字符集</span></div>
+        <input type="text" id="charset" value=" .:-=+*#%@" spellcheck="false" />
+        <div class="hint">暗 → 亮。第 0 位必须是空格。</div>
+      </div>
+      <div class="toggle-row">
+        <span class="name">respectMotionPreference</span>
+        <label class="switch"><input type="checkbox" id="motion" checked /><span class="sl"></span></label>
+      </div>
+    </section>
+  </aside>
+
+  <script type="module">
+    import {
+      createMotes, defineEffect, listEffects, DEFAULT_OPTIONS,
+    } from 'https://cdn.jsdelivr.net/npm/@lucasmarkes/motes@0.3.0/dist/index.js'
+
+    // 演示站里那个「自定义效果」：六行 GLSL，指针自动生效（库里没有）
+    defineEffect('rain', {
+      glsl: `float field(vec2 cell, float t) {
+        float lane  = fract(sin(cell.x * 91.7) * 4321.0);
+        float speed = 0.5 + lane * 1.1;
+        float drop  = fract(cell.y * 0.05 - t * speed + lane * 7.0);
+        float head  = smoothstep(0.0, 0.05, drop) * pow(1.0 - drop, 5.0);
+        return head * (0.55 + lane * 0.45);
+      }`,
+    })
+
+    const EFFECTS = [
+      'flow', 'waves', 'pulse', 'embers', 'dust', 'contour',
+      'moire', 'aurora', 'ripples', 'smoke', 'corona', 'rain',
+    ]
+
+    const PRESETS = {
+      void:     { label: 'Void',     background: '#050403', ink: '#827865', accent: '#ddeafe' },
+      terminal: { label: 'Terminal', background: '#020a04', ink: '#1f6b34', accent: '#7dffa8' },
+      amber:    { label: 'Amber',    background: '#0a0500', ink: '#7a4a08', accent: '#ffb347' },
+      paper:    { label: 'Paper',    background: '#f5f2ea', ink: '#8a8578', accent: '#1a1a1a' },
+      glass:    { label: 'Glass',    background: 'transparent', ink: '#ffffff', accent: '#ddeafe' },
+    }
+
+    // 滑杆定义（数字与官方演示站完全一致）
+    const SLIDERS = [
+      { id: 'radius',   label: 'radius',   unit: 'px', min: 40,  max: 360, step: 1,    group: 'pointer', fmt: v => `${v}px` },
+      { id: 'force',    label: 'force',    unit: '',   min: 0,   max: 3,   step: 0.1,  group: 'pointer', fmt: v => v.toFixed(1) },
+      { id: 'density',  label: 'density',  unit: 'px', min: 8,   max: 22,  step: 1,    group: 'field',   fmt: v => `${v}px` },
+      { id: 'speed',    label: 'speed',    unit: '',   min: 0,   max: 3,   step: 0.1,  group: 'field',   fmt: v => v.toFixed(1) },
+      { id: 'contrast', label: 'contrast', unit: '',   min: 0,   max: 3,   step: 0.05, group: 'field',   fmt: v => v.toFixed(2) },
+      { id: 'brightness', label: 'brightness', unit: '', min: -0.5, max: 0.5, step: 0.01, group: 'field', fmt: v => (v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2)) },
+      { id: 'trail',    label: 'persistence', unit: '', min: 0, max: 1,   step: 0.01, group: 'field', fmt: v => v.toFixed(2) },
+    ]
+
+    // 起始配置 = 演示站 Void 预设
+    const initial = {
+      effect: 'flow',
+      pointer: true,
+      radius: 150, force: 1.4, density: 13, speed: 1,
+      contrast: 1, brightness: 0, trail: 0.3,
+      charset: ' .:-=+*#%@',
+      respectMotionPreference: true,
+      background: PRESETS.void.background,
+      ink: PRESETS.void.ink,
+      accent: PRESETS.void.accent,
+    }
+
+    const field = createMotes(document.getElementById('bg'), initial)
+    field.start()
+
+    // ---------- 效果下拉 ----------
+    const effectSel = document.getElementById('effect')
+    for (const name of EFFECTS) {
+      const o = document.createElement('option')
+      o.value = name; o.textContent = name
+      effectSel.appendChild(o)
+    }
+    effectSel.value = initial.effect
+    effectSel.addEventListener('change', () => field.set({ effect: effectSel.value }))
+
+    // ---------- 预设按钮 ----------
+    const presetsEl = document.getElementById('presets')
+    let activePreset = 'void'
+    function applyPreset(id) {
+      const p = PRESETS[id]
+      activePreset = id
+      field.set({ background: p.background, ink: p.ink, accent: p.accent })
+      document.getElementById('bg-transparent').checked = p.background === 'transparent'
+      document.getElementById('bg-color').disabled = p.background === 'transparent'
+      if (p.background !== 'transparent') document.getElementById('bg-color').value = p.background
+      document.getElementById('ink-color').value = p.ink
+      document.getElementById('ink-hex').textContent = p.ink
+      document.getElementById('accent-color').value = p.accent
+      document.getElementById('accent-hex').textContent = p.accent
+      ;[...presetsEl.children].forEach(b => b.classList.toggle('active', b.dataset.id === id))
+    }
+    for (const [id, p] of Object.entries(PRESETS)) {
+      const b = document.createElement('button')
+      b.className = 'preset'; b.dataset.id = id; b.textContent = p.label
+      b.addEventListener('click', () => applyPreset(id))
+      presetsEl.appendChild(b)
+    }
+    applyPreset('void')
+
+    // ---------- 颜色 ----------
+    const bgColor = document.getElementById('bg-color')
+    const bgTransparent = document.getElementById('bg-transparent')
+    const inkColor = document.getElementById('ink-color')
+    const accentColor = document.getElementById('accent-color')
+
+    function setBackground() {
+      const v = bgTransparent.checked ? 'transparent' : bgColor.value
+      bgColor.disabled = bgTransparent.checked
+      field.set({ background: v })
+    }
+    bgColor.addEventListener('input', () => { setBackground() })
+    bgTransparent.addEventListener('change', () => { setBackground() })
+    inkColor.addEventListener('input', () => {
+      field.set({ ink: inkColor.value })
+      document.getElementById('ink-hex').textContent = inkColor.value
+    })
+    accentColor.addEventListener('input', () => {
+      field.set({ accent: accentColor.value })
+      document.getElementById('accent-hex').textContent = accentColor.value
+    })
+
+    // ---------- 滑杆 ----------
+    for (const s of SLIDERS) {
+      const wrap = document.createElement('div')
+      wrap.className = 'slider'
+      wrap.innerHTML = `
+        <div class="head">
+          <span class="name">${s.label}${s.unit ? ' <em>(' + s.unit + ')</em>' : ''}</span>
+          <span class="val" id="val-${s.id}"></span>
+        </div>
+        <input type="range" id="${s.id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${initial[s.id]}">
+      `
+      document.getElementById(`sliders-${s.group}`).appendChild(wrap)
+      const input = wrap.querySelector('input')
+      const val = wrap.querySelector('.val')
+      val.textContent = s.fmt(initial[s.id])
+      input.addEventListener('input', () => {
+        const v = Number(input.value)
+        val.textContent = s.fmt(v)
+        field.set({ [s.id]: v })
+      })
+    }
+
+    // ---------- 开关 ----------
+    document.getElementById('pointer').addEventListener('change', e => field.set({ pointer: e.target.checked }))
+    document.getElementById('motion').addEventListener('change', e => field.set({ respectMotionPreference: e.target.checked }))
+
+    // ---------- 字符集 ----------
+    document.getElementById('charset').addEventListener('input', e => {
+      const v = e.target.value
+      if (v && v[0] !== ' ') field.set({ charset: ' ' + v.replace(/^ +/, '') })
+      else if (v) field.set({ charset: v })
+    })
+
+    // ---------- 面板开关 ----------
+    const toggle = document.getElementById('toggle')
+    toggle.addEventListener('click', () => {
+      const closed = document.body.classList.toggle('panel-closed')
+      toggle.textContent = closed ? '⚙ 控制' : '✕ 收起'
+    })
+  </script>
+</body>
+</html>
