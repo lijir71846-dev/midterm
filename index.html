@@ -140,13 +140,6 @@
   .ascii-controls .c { flex: 1 1 160px; }
   .ascii-controls label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
   .ascii-controls .checkbox { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-  .ascii-controls .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .ascii-controls .tog {
-    padding: 7px 12px; background: transparent; border: 1px solid var(--border);
-    color: var(--muted); border-radius: 7px; font: inherit; cursor: pointer;
-  }
-  .ascii-controls .tog:hover { border-color: var(--accent); }
-  .ascii-controls .tog.active { background: var(--accent); color: #0a0908; border-color: var(--accent); font-weight: 600; }
 
   #download {
     padding: 9px 16px; background: var(--accent); color: #0a0908; border: 0;
@@ -273,11 +266,9 @@
         </div>
         <div class="c">
           <div class="checkbox"><input type="checkbox" id="ascii-color" /> 彩色</div>
-          <div class="btns">
-            <button type="button" class="tog" id="ascii-invert">反色</button>
-            <button type="button" class="tog" id="ascii-mirror">镜像</button>
-            <button type="button" class="tog" id="ascii-dither">抖动</button>
-          </div>
+          <div class="checkbox"><input type="checkbox" id="ascii-invert" /> 反色</div>
+          <div class="checkbox"><input type="checkbox" id="ascii-mirror" /> 镜像</div>
+          <div class="checkbox"><input type="checkbox" id="ascii-dither" /> 抖动</div>
         </div>
         <button id="download" disabled>下载 PNG</button>
       </div>
@@ -1454,12 +1445,13 @@ function createMotes(canvas, config = {}) {
       return out
     }
 
-    // 每个单元格在某一“秒”内的确定性随机数（0..1），用于抖动动画。
-    function ditherHash(x, y, t) {
-      let n = x * 374761393 + y * 668265263 + t * 2246822519
-      n = (n ^ (n >>> 13)) * 1274126177
-      n = n ^ (n >>> 16)
-      return (n >>> 0) / 4294967296
+    // 4×4 拜耳矩阵（有序抖动）：让抖动形成规律的网纹，而不是随机噪点。
+    const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+
+    // 每个单元格在某一“秒”内的抖动相位（0..1），t 为秒级 tick。
+    function ditherPhase(x, y, t) {
+      const b = (BAYER4[(y & 3) * 4 + (x & 3)] + 0.5) / 16
+      return (b + t * 0.382) % 1
     }
 
     function renderAscii() {
@@ -1479,9 +1471,9 @@ function createMotes(canvas, config = {}) {
       if (blur >= 1) data = boxBlurRGBA(data, cols, rows, blur)
 
       const chars = asciiCharset.value || ' '
-      const invert = asciiInvert.classList.contains('active')
-      const mirror = asciiMirror.classList.contains('active')
-      const dither = asciiDither.classList.contains('active')
+      const invert = asciiInvert.checked
+      const mirror = asciiMirror.checked
+      const dither = asciiDither.checked
       const color = asciiColor.checked
       const cw = 9, ch = 15
 
@@ -1505,10 +1497,10 @@ function createMotes(canvas, config = {}) {
           const idx = Math.max(0, Math.min(chars.length - 1, Math.floor(lum / 255 * (chars.length - 1))))
           let gidx = idx
           if (dither) {
-            const r = ditherHash(x, y, ditherTick)
-            gidx = r < 0.333 ? Math.min(idx + 1, chars.length - 1)
-                 : r < 0.666 ? idx
-                 : 0
+            const p = ditherPhase(x, y, ditherTick)
+            gidx = p < 0.333 ? Math.min(idx + 1, chars.length - 1)
+                 : p < 0.667 ? idx
+                 : Math.max(idx - 1, 0)
           }
           const glyph = chars[gidx] || ' '
           if (color) {
@@ -1523,16 +1515,16 @@ function createMotes(canvas, config = {}) {
 
     function updateDitherTimer() {
       if (ditherTimer) { clearInterval(ditherTimer); ditherTimer = null }
-      if (asciiDither.classList.contains('active')) {
+      if (asciiDither.checked) {
         ditherTimer = setInterval(() => { ditherTick++; renderAscii() }, 1000)
       }
     }
 
     asciiCols.addEventListener('input', () => { asciiColsVal.textContent = asciiCols.value; renderAscii() })
     asciiCharset.addEventListener('input', renderAscii)
-    asciiInvert.addEventListener('click', () => { asciiInvert.classList.toggle('active'); renderAscii() })
-    asciiMirror.addEventListener('click', () => { asciiMirror.classList.toggle('active'); renderAscii() })
-    asciiDither.addEventListener('click', () => { asciiDither.classList.toggle('active'); updateDitherTimer(); renderAscii() })
+    asciiInvert.addEventListener('change', renderAscii)
+    asciiMirror.addEventListener('change', renderAscii)
+    asciiDither.addEventListener('change', () => { updateDitherTimer(); renderAscii() })
     asciiColor.addEventListener('change', renderAscii)
     asciiContrast.addEventListener('input', () => { asciiContrastVal.textContent = Number(asciiContrast.value).toFixed(2); renderAscii() })
     asciiBrightness.addEventListener('input', () => { const v = Number(asciiBrightness.value); asciiBrightnessVal.textContent = (v > 0 ? '+' : '') + v; renderAscii() })
