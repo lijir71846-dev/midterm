@@ -152,7 +152,12 @@
     border-radius: 7px; background: transparent; cursor: pointer;
   }
 
-  #ascii-canvas { display: block; max-width: 100%; height: auto; margin-top: 20px; border-radius: 6px; }
+  #ascii-stage {
+    margin-top: 20px; width: fit-content; max-width: 100%;
+    max-height: 72vh; overflow: auto;
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  #ascii-canvas { display: block; width: auto; height: auto; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -300,7 +305,9 @@
         </div>
       </div>
 
-      <canvas id="ascii-canvas"></canvas>
+      <div id="ascii-stage">
+        <canvas id="ascii-canvas"></canvas>
+      </div>
     </div>
   </div>
 
@@ -1600,3 +1607,4 @@ function createMotes(canvas, config = {}) {
   </script>
 </body>
 </html>
+
