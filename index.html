@@ -160,10 +160,10 @@
   #ascii-stage::-webkit-scrollbar { width: 12px; height: 12px; }
   #ascii-stage::-webkit-scrollbar-track { background: rgba(255,255,255,.06); border-radius: 6px; }
   #ascii-stage::-webkit-scrollbar-thumb {
-    background: var(--accent); border-radius: 6px;
+    background: rgba(221, 234, 254, 0.5); border-radius: 6px;
     border: 2px solid rgba(255,255,255,.06); background-clip: padding-box;
   }
-  #ascii-stage::-webkit-scrollbar-thumb:hover { background: var(--text); }
+  #ascii-stage::-webkit-scrollbar-thumb:hover { background: rgba(232, 226, 213, 0.5); }
   #ascii-stage::-webkit-scrollbar-corner { background: transparent; }
   #ascii-canvas { display: block; width: auto; height: auto; border-radius: 6px; }
 </style>
@@ -290,6 +290,10 @@
         <div class="c">
           <label for="ascii-bg">背景颜色</label>
           <input type="color" id="ascii-bg" value="#0a0908" />
+        </div>
+        <div class="c">
+          <label for="ascii-fg">字符颜色</label>
+          <input type="color" id="ascii-fg" value="#e8e2d5" />
         </div>
         <div class="c">
           <label for="ascii-line">行距</label>
@@ -1430,6 +1434,7 @@ function createMotes(canvas, config = {}) {
     const downloadBtn = document.getElementById('download')
     const downloadJpgBtn = document.getElementById('download-jpg')
     const asciiBg = document.getElementById('ascii-bg')
+    const asciiFg = document.getElementById('ascii-fg')
     const asciiLine = document.getElementById('ascii-line')
     const asciiLineVal = document.getElementById('ascii-line-val')
     const asciiLetter = document.getElementById('ascii-letter')
@@ -1527,6 +1532,7 @@ function createMotes(canvas, config = {}) {
       const dither = asciiDither.checked
       const color = asciiColor.checked
       const bg = asciiBg.value
+      const fg = asciiFg.value
       const lineSpacing = Number(asciiLine.value)
       const letterSpacing = Number(asciiLetter.value)
       const zoom = Number(asciiZoom.value) / 100
@@ -1563,7 +1569,7 @@ function createMotes(canvas, config = {}) {
           if (color) {
             actx.fillStyle = invert ? `rgb(${255 - r},${255 - g},${255 - b})` : `rgb(${r},${g},${b})`
           } else {
-            actx.fillStyle = '#e8e2d5'
+            actx.fillStyle = fg
           }
           actx.fillText(glyph, x * cw + cw / 2, y * ch + ch / 2)
         }
@@ -1588,6 +1594,7 @@ function createMotes(canvas, config = {}) {
     asciiBrightness.addEventListener('input', () => { const v = Number(asciiBrightness.value); asciiBrightnessVal.textContent = (v > 0 ? '+' : '') + v; renderAscii() })
     asciiBlur.addEventListener('input', () => { asciiBlurVal.textContent = asciiBlur.value; renderAscii() })
     asciiBg.addEventListener('input', renderAscii)
+    asciiFg.addEventListener('input', renderAscii)
     asciiLine.addEventListener('input', () => { asciiLineVal.textContent = Number(asciiLine.value).toFixed(2); renderAscii() })
     asciiLetter.addEventListener('input', () => { asciiLetterVal.textContent = Number(asciiLetter.value).toFixed(2); renderAscii() })
 
