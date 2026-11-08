@@ -140,6 +140,13 @@
   .ascii-controls .c { flex: 1 1 160px; }
   .ascii-controls label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
   .ascii-controls .checkbox { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .ascii-controls .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .ascii-controls .tog {
+    padding: 7px 12px; background: transparent; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 7px; font: inherit; cursor: pointer;
+  }
+  .ascii-controls .tog:hover { border-color: var(--accent); }
+  .ascii-controls .tog.active { background: var(--accent); color: #0a0908; border-color: var(--accent); font-weight: 600; }
 
   #download {
     padding: 9px 16px; background: var(--accent); color: #0a0908; border: 0;
@@ -232,7 +239,7 @@
   <div id="ascii-view">
     <div class="wrap">
       <h1>图片转 ASCII</h1>
-      <p class="sub">上传一张图片，按亮度映射成字符画。分辨率、字符集、对比度、亮度、模糊、反色、彩色都可调。</p>
+      <p class="sub">上传一张图片，按亮度映射成字符画。分辨率、字符集、对比度、亮度、模糊、反色、镜像、抖动、彩色都可调。</p>
 
       <label class="drop" id="drop">
         <input type="file" accept="image/*" id="file" />
@@ -265,8 +272,12 @@
           <span class="val" id="ascii-blur-val" style="color:var(--text)">0</span>
         </div>
         <div class="c">
-          <div class="checkbox"><input type="checkbox" id="ascii-invert" /> 反色</div>
           <div class="checkbox"><input type="checkbox" id="ascii-color" /> 彩色</div>
+          <div class="btns">
+            <button type="button" class="tog" id="ascii-invert">反色</button>
+            <button type="button" class="tog" id="ascii-mirror">镜像</button>
+            <button type="button" class="tog" id="ascii-dither">抖动</button>
+          </div>
         </div>
         <button id="download" disabled>下载 PNG</button>
       </div>
@@ -1373,6 +1384,8 @@ function createMotes(canvas, config = {}) {
     const asciiCharset = document.getElementById('ascii-charset')
     const asciiInvert = document.getElementById('ascii-invert')
     const asciiColor = document.getElementById('ascii-color')
+    const asciiMirror = document.getElementById('ascii-mirror')
+    const asciiDither = document.getElementById('ascii-dither')
     const asciiContrast = document.getElementById('ascii-contrast')
     const asciiContrastVal = document.getElementById('ascii-contrast-val')
     const asciiBrightness = document.getElementById('ascii-brightness')
@@ -1382,6 +1395,8 @@ function createMotes(canvas, config = {}) {
     const downloadBtn = document.getElementById('download')
 
     let asciiImg = null
+    let ditherTick = 0
+    let ditherTimer = null
 
     fileInput.addEventListener('change', e => {
       if (e.target.files[0]) loadFile(e.target.files[0])
@@ -1439,6 +1454,14 @@ function createMotes(canvas, config = {}) {
       return out
     }
 
+    // 每个单元格在某一“秒”内的确定性随机数（0..1），用于抖动动画。
+    function ditherHash(x, y, t) {
+      let n = x * 374761393 + y * 668265263 + t * 2246822519
+      n = (n ^ (n >>> 13)) * 1274126177
+      n = n ^ (n >>> 16)
+      return (n >>> 0) / 4294967296
+    }
+
     function renderAscii() {
       if (!asciiImg) return
       const cols = Number(asciiCols.value)
@@ -1456,7 +1479,9 @@ function createMotes(canvas, config = {}) {
       if (blur >= 1) data = boxBlurRGBA(data, cols, rows, blur)
 
       const chars = asciiCharset.value || ' '
-      const invert = asciiInvert.checked
+      const invert = asciiInvert.classList.contains('active')
+      const mirror = asciiMirror.classList.contains('active')
+      const dither = asciiDither.classList.contains('active')
       const color = asciiColor.checked
       const cw = 9, ch = 15
 
@@ -1470,14 +1495,22 @@ function createMotes(canvas, config = {}) {
 
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
-          const i = (y * cols + x) * 4
+          const sx = mirror ? (cols - 1 - x) : x
+          const i = (y * cols + sx) * 4
           const r = data[i], g = data[i + 1], b = data[i + 2]
           let lum = 0.299 * r + 0.587 * g + 0.114 * b
           lum = (lum - 128) * contrast + 128 + brightness
           if (invert) lum = 255 - lum
           lum = Math.max(0, Math.min(255, lum))
           const idx = Math.max(0, Math.min(chars.length - 1, Math.floor(lum / 255 * (chars.length - 1))))
-          const glyph = chars[idx] || ' '
+          let gidx = idx
+          if (dither) {
+            const r = ditherHash(x, y, ditherTick)
+            gidx = r < 0.333 ? Math.min(idx + 1, chars.length - 1)
+                 : r < 0.666 ? idx
+                 : 0
+          }
+          const glyph = chars[gidx] || ' '
           if (color) {
             actx.fillStyle = invert ? `rgb(${255 - r},${255 - g},${255 - b})` : `rgb(${r},${g},${b})`
           } else {
@@ -1488,9 +1521,18 @@ function createMotes(canvas, config = {}) {
       }
     }
 
+    function updateDitherTimer() {
+      if (ditherTimer) { clearInterval(ditherTimer); ditherTimer = null }
+      if (asciiDither.classList.contains('active')) {
+        ditherTimer = setInterval(() => { ditherTick++; renderAscii() }, 1000)
+      }
+    }
+
     asciiCols.addEventListener('input', () => { asciiColsVal.textContent = asciiCols.value; renderAscii() })
     asciiCharset.addEventListener('input', renderAscii)
-    asciiInvert.addEventListener('change', renderAscii)
+    asciiInvert.addEventListener('click', () => { asciiInvert.classList.toggle('active'); renderAscii() })
+    asciiMirror.addEventListener('click', () => { asciiMirror.classList.toggle('active'); renderAscii() })
+    asciiDither.addEventListener('click', () => { asciiDither.classList.toggle('active'); updateDitherTimer(); renderAscii() })
     asciiColor.addEventListener('change', renderAscii)
     asciiContrast.addEventListener('input', () => { asciiContrastVal.textContent = Number(asciiContrast.value).toFixed(2); renderAscii() })
     asciiBrightness.addEventListener('input', () => { const v = Number(asciiBrightness.value); asciiBrightnessVal.textContent = (v > 0 ? '+' : '') + v; renderAscii() })
