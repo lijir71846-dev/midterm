@@ -237,7 +237,7 @@
   <div id="ascii-view">
     <div class="wrap">
       <h1>图片转 ASCII</h1>
-      <p class="sub">上传一张图片，按亮度映射成字符画。分辨率、字符集、对比度、亮度、模糊、反色、镜像、抖动、彩色、背景、行距、字间距都可调。</p>
+      <p class="sub">上传一张图片，按亮度映射成字符画。分辨率、缩放、字符集、对比度、亮度、模糊、反色、镜像、抖动、彩色、背景、行距、字间距都可调。</p>
 
       <label class="drop" id="drop">
         <input type="file" accept="image/*" id="file" />
@@ -247,8 +247,13 @@
       <div class="ascii-controls">
         <div class="c">
           <label for="ascii-cols">分辨率（每行字符数）</label>
-          <input type="range" id="ascii-cols" min="40" max="220" step="5" value="120" />
-          <span class="val" id="ascii-cols-val" style="color:var(--text)">120</span>
+          <input type="range" id="ascii-cols" min="60" max="280" step="5" value="160" />
+          <span class="val" id="ascii-cols-val" style="color:var(--text)">160</span>
+        </div>
+        <div class="c">
+          <label for="ascii-zoom">图片缩放</label>
+          <input type="range" id="ascii-zoom" min="50" max="250" step="5" value="100" />
+          <span class="val" id="ascii-zoom-val" style="color:var(--text)">100%</span>
         </div>
         <div class="c">
           <label for="ascii-charset">字符集（暗 → 亮）</label>
@@ -1394,6 +1399,8 @@ function createMotes(canvas, config = {}) {
     const actx = asciiCanvas.getContext('2d')
     const asciiCols = document.getElementById('ascii-cols')
     const asciiColsVal = document.getElementById('ascii-cols-val')
+    const asciiZoom = document.getElementById('ascii-zoom')
+    const asciiZoomVal = document.getElementById('ascii-zoom-val')
     const asciiCharset = document.getElementById('ascii-charset')
     const asciiInvert = document.getElementById('ascii-invert')
     const asciiColor = document.getElementById('ascii-color')
@@ -1507,9 +1514,10 @@ function createMotes(canvas, config = {}) {
       const bg = asciiBg.value
       const lineSpacing = Number(asciiLine.value)
       const letterSpacing = Number(asciiLetter.value)
-      const fontSize = 15
-      const cw = Math.max(4, Math.round(9 * letterSpacing))
-      const ch = Math.max(8, Math.round(15 * lineSpacing))
+      const zoom = Number(asciiZoom.value) / 100
+      const fontSize = Math.max(4, Math.round(15 * zoom))
+      const cw = Math.max(4, Math.round(9 * letterSpacing * zoom))
+      const ch = Math.max(8, Math.round(15 * lineSpacing * zoom))
 
       asciiCanvas.width = cols * cw
       asciiCanvas.height = rows * ch
@@ -1555,6 +1563,7 @@ function createMotes(canvas, config = {}) {
     }
 
     asciiCols.addEventListener('input', () => { asciiColsVal.textContent = asciiCols.value; renderAscii() })
+    asciiZoom.addEventListener('input', () => { asciiZoomVal.textContent = asciiZoom.value + '%'; renderAscii() })
     asciiCharset.addEventListener('input', renderAscii)
     asciiInvert.addEventListener('change', renderAscii)
     asciiMirror.addEventListener('change', renderAscii)
